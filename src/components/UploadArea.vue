@@ -16,7 +16,7 @@
 
       <div class="upload-text">
         <h3>拖拽图片到此处或点击上传</h3>
-        <p>支持 JPG、PNG、PDF 格式，最大支持 100MB</p>
+        <p>支持 JPG、PNG、PDF 格式，最大支持 50MB</p>
       </div>
 
       <input
@@ -54,6 +54,11 @@
           <option value="pdf">PDF</option>
         </select>
       </div>
+      
+      <div class="ocr-info">
+        <span class="ocr-badge">✨ PaddleOCR</span>
+        <span class="ocr-description">支持80+语言高精度识别，更快更准确</span>
+      </div>
 
       <div class="upload-actions">
         <button @click="clearAll" class="clear-btn">清空全部</button>
@@ -88,11 +93,33 @@ const handleFileSelect = (e) => {
 }
 
 const addFiles = (files) => {
+  const maxSize = 50 * 1024 * 1024 // 50MB (与后端保持一致)
+  const rejectedFiles = []
+  
   const validFiles = files.filter(file => {
     const isValidType = file.type.startsWith('image/') || file.type === 'application/pdf'
-    const isValidSize = file.size <= 100 * 1024 * 1024 // 100MB
-    return isValidType && isValidSize
+    const isValidSize = file.size <= maxSize
+    
+    if (!isValidType) {
+      rejectedFiles.push({ name: file.name, reason: '不支持的文件格式' })
+      return false
+    }
+    
+    if (!isValidSize) {
+      rejectedFiles.push({ 
+        name: file.name, 
+        reason: `文件过大 (${formatFileSize(file.size)})，最大支持 50MB` 
+      })
+      return false
+    }
+    
+    return true
   })
+
+  if (rejectedFiles.length > 0) {
+    const messages = rejectedFiles.map(f => `${f.name}: ${f.reason}`).join('\n')
+    alert(`以下文件无法添加：\n${messages}`)
+  }
 
   selectedFiles.value = [...selectedFiles.value, ...validFiles]
 }
@@ -296,5 +323,26 @@ const startProcessing = () => {
   border-radius: 6px;
   border: 1px solid #ccc;
   font-size: 1rem;
+}
+
+.ocr-info {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ocr-badge {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.ocr-description {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
 }
 </style>

@@ -1,0 +1,74 @@
+# Test your FastAPI endpoints
+
+GET http://127.0.0.1:8000/
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/hello/User
+Accept: application/json
+
+###
+
+# OCR 文本输出测试
+POST http://127.0.0.1:8000/ocr/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test_image.jpg"
+Content-Type: image/jpeg
+
+< ./test_image.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="lang"
+
+eng
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="output_format"
+
+text
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+# OCR Word文档输出测试
+POST http://127.0.0.1:8000/ocr/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test_image.jpg"
+Content-Type: image/jpeg
+
+< ./test_image.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="lang"
+
+eng
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="output_format"
+
+word
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+# OCR PDF输出测试
+POST http://127.0.0.1:8000/ocr/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test_image.jpg"
+Content-Type: image/jpeg
+
+< ./test_image.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="lang"
+
+eng
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="output_format"
+
+pdf
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
