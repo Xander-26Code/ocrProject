@@ -6,79 +6,38 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import random
 import os
 import time
 import logging
-
-# 导入PaddleOCR
-try:
-    from paddleocr import PaddleOCR
-    PADDLE_OCR_AVAILABLE = True
-    print("PaddleOCR imported successfully")
-except ImportError:
-    PADDLE_OCR_AVAILABLE = False
-    print("PaddleOCR not available, please install: pip install paddleocr")
-
-# 配置日志
+import pytesseract #This is the package we use to convert image to text
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 设置语言检测的随机种子，确保结果一致性
-DetectorFactory.seed = 0
+current_time = int(time.time() * 1000000)  
+DetectorFactory.seed = current_time
+random.seed(current_time)  
+logger.info(f"Language detection seed set to: {current_time}")
 
-# 语言映射表：langdetect库的语言代码 -> PaddleOCR语言代码
 LANG_MAP = {
-    'zh-cn': 'ch',       # 简体中文
-    'zh': 'ch',          # 中文（默认简体）
-    'en': 'en',          # 英语
-    'ja': 'japan',       # 日语
-    'ko': 'korean',      # 韩语
-    'fr': 'french',      # 法语
-    'de': 'german',      # 德语
-    'es': 'spanish',     # 西班牙语
-    'it': 'italian',     # 意大利语
-    'pt': 'portuguese',  # 葡萄牙语
-    'ru': 'russian',     # 俄语
-    'ar': 'arabic',      # 阿拉伯语
-    'th': 'thai',        # 泰语
-    'vi': 'vietnamese',  # 越南语
-}
-
-# Tesseract到PaddleOCR的语言映射（保持向后兼容）
-TESSERACT_TO_PADDLE = {
-    'chi_sim': 'ch',
-    'chi_tra': 'chinese_cht',
-    'eng': 'en',
-    'jpn': 'japan',
-    'kor': 'korean',
-    'fra': 'french',
-    'deu': 'german',
-    'spa': 'spanish',
-    'ita': 'italian',
-    'por': 'portuguese',
-    'rus': 'russian',
-    'ara': 'arabic',
-    'tha': 'thai',
-    'vie': 'vietnamese',
+    'zh-cn': 'chi_sim',     
+    'zh': 'chi_sim',        
+    'en': 'eng',            
+    'ja': 'jpn',            
+    'ko': 'kor',            
+    'fr': 'fra',            
+    'de': 'deu',            
+    'es': 'spa',            
+    'it': 'ita',            
+    'pt': 'por',            
+    'ru': 'rus',           
+    'ar': 'ara',           
+    'th': 'tha',            
+    'vi': 'vie',            
 }
 
 # 语言名称映射表
 LANG_NAMES = {
-    'ch': '简体中文',
-    'chinese_cht': '繁体中文',
-    'en': '英语',
-    'japan': '日语',
-    'korean': '韩语',
-    'french': '法语',
-    'german': '德语',
-    'spanish': '西班牙语',
-    'italian': '意大利语',
-    'portuguese': '葡萄牙语',
-    'russian': '俄语',
-    'arabic': '阿拉伯语',
-    'thai': '泰语',
-    'vietnamese': '越南语',
-    # 保持向后兼容
     'chi_sim': '简体中文',
     'chi_tra': '繁体中文',
     'eng': '英语',
@@ -95,117 +54,69 @@ LANG_NAMES = {
     'vie': '越南语',
 }
 
-# 全局PaddleOCR实例缓存
-paddle_ocr_instances = {}
-
-def get_paddle_lang(lang_code):
+def get_tesseract_lang(lang_code):
     """
-    转换语言代码为PaddleOCR格式
+    转换语言代码为Tesseract格式
     """
-    # 如果是Tesseract格式，先转换
-    if lang_code in TESSERACT_TO_PADDLE:
-        return TESSERACT_TO_PADDLE[lang_code]
-    
-    # 如果已经是PaddleOCR格式，直接返回
-    if lang_code in ['ch', 'en', 'japan', 'korean', 'french', 'german', 'spanish', 'russian', 'arabic']:
+    # 如果已经是Tesseract格式，直接返回
+    if lang_code in LANG_NAMES:
         return lang_code
     
-    # 默认返回中文
-    return 'ch'
+    # 如果是langdetect格式，转换
+    if lang_code in LANG_MAP:
+        return LANG_MAP[lang_code]
+    
+    # 默认返回英语
+    return 'eng'
 
-def get_paddle_ocr_instance(lang='ch'):
+def extract_text_with_tesseract(image_path, lang='eng'):
     """
-    获取PaddleOCR实例，使用缓存避免重复初始化
-    """
-    if not PADDLE_OCR_AVAILABLE:
-        raise Exception("PaddleOCR not available")
-    
-    paddle_lang = get_paddle_lang(lang)
-    
-    # 如果实例已存在且语言匹配，直接返回
-    if paddle_lang in paddle_ocr_instances:
-        return paddle_ocr_instances[paddle_lang]
-    
-    try:
-        logger.info(f"Initializing PaddleOCR with language: {paddle_lang}")
-        
-        # 创建PaddleOCR实例
-        ocr = PaddleOCR(
-            use_angle_cls=True,    # 使用角度分类器
-            lang=paddle_lang,      # 语言
-            use_gpu=False,         # 不使用GPU（兼容性更好）
-            show_log=False,        # 不显示详细日志
-            drop_score=0.5,        # 置信度阈值
-        )
-        
-        # 缓存实例
-        paddle_ocr_instances[paddle_lang] = ocr
-        logger.info(f"PaddleOCR initialized successfully for {paddle_lang}")
-        
-        return ocr
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize PaddleOCR: {e}")
-        raise e
-
-def extract_text_with_paddle(image_path, lang='ch'):
-    """
-    使用PaddleOCR提取文本
+    使用Tesseract OCR提取文本
     """
     try:
         start_time = time.time()
         
-        # 获取OCR实例
-        ocr = get_paddle_ocr_instance(lang)
+        # 打开图像
+        image = Image.open(image_path)
+        
+        # 转换语言代码
+        tesseract_lang = get_tesseract_lang(lang)
         
         # 执行OCR识别
-        result = ocr.ocr(image_path, cls=True)
+        custom_config = r'--oem 3 --psm 6'
+        text = pytesseract.image_to_string(image, lang=tesseract_lang, config=custom_config)
         
-        # 提取文本
-        text_lines = []
-        if result and result[0]:
-            for line in result[0]:
-                if len(line) >= 2 and len(line[1]) >= 2:
-                    # line[1][0] 是识别的文本，line[1][1] 是置信度
-                    confidence = line[1][1]
-                    text = line[1][0]
-                    
-                    # 只保留置信度较高的文本
-                    if confidence > 0.5:
-                        text_lines.append(text)
-        
-        extracted_text = '\n'.join(text_lines)
         processing_time = time.time() - start_time
         
-        logger.info(f"PaddleOCR processing time: {processing_time:.2f}s, extracted {len(text_lines)} lines")
-        return extracted_text, processing_time
+        logger.info(f"Tesseract processing time: {processing_time:.2f}s, language: {tesseract_lang}")
+        return text.strip(), processing_time
         
     except Exception as e:
-        logger.error(f"PaddleOCR extraction failed: {e}")
+        logger.error(f"Tesseract extraction failed: {e}")
         return None, 0.0
 
 def detect_language(text):
     """
     检测文本的语言
     :param text: 要检测的文本
-    :return: 检测到的语言代码（PaddleOCR格式）
+    :return: 检测到的语言代码（Tesseract格式）
     """
     if not text or len(text.strip()) < 3:
-        return 'ch'  # 默认返回中文
+        return 'eng'  # 默认返回英语
 
     try:
         # 使用langdetect检测语言
         detected_lang = detect(text)
         print(f"检测到的语言: {detected_lang}")
 
-        # 转换为PaddleOCR语言代码
-        paddle_lang = LANG_MAP.get(detected_lang, 'ch')
-        print(f"转换为PaddleOCR语言代码: {paddle_lang}")
+        # 转换为Tesseract语言代码
+        tesseract_lang = LANG_MAP.get(detected_lang, 'eng')
+        print(f"转换为Tesseract语言代码: {tesseract_lang}")
 
-        return paddle_lang
+        return tesseract_lang
     except LangDetectException:
-        print("语言检测失败，使用默认语言: ch")
-        return 'ch'
+        print("语言检测失败，使用默认语言: eng")
+        return 'eng'
 
 def auto_detect_and_ocr(image_path):
     """
@@ -214,12 +125,12 @@ def auto_detect_and_ocr(image_path):
     :return: tuple (识别的文本, 检测到的语言代码)
     """
     try:
-        # 首先用中文进行初步OCR识别，获取文本样本用于语言检测
-        initial_text, _ = extract_text_with_paddle(image_path, 'ch')
+        # 首先用英语进行初步OCR识别，获取文本样本用于语言检测
+        initial_text, _ = extract_text_with_tesseract(image_path, 'eng')
 
         if not initial_text or not initial_text.strip():
-            # 如果中文识别不出内容，尝试英语
-            initial_text, _ = extract_text_with_paddle(image_path, 'en')
+            # 如果英语识别不出内容，尝试中文
+            initial_text, _ = extract_text_with_tesseract(image_path, 'chi_sim')
 
         if not initial_text or not initial_text.strip():
             logger.warning("No text detected in initial OCR")
@@ -231,9 +142,9 @@ def auto_detect_and_ocr(image_path):
         detected_lang = detect_language(initial_text)
 
         # 如果检测到的语言与初始使用的不同，重新进行OCR
-        if detected_lang not in ['ch', 'en']:
+        if detected_lang not in ['eng', 'chi_sim']:
             print(f"重新使用检测到的语言进行OCR: {detected_lang}")
-            final_text, _ = extract_text_with_paddle(image_path, detected_lang)
+            final_text, _ = extract_text_with_tesseract(image_path, detected_lang)
         else:
             final_text = initial_text
 
@@ -258,9 +169,9 @@ def image_to_text(image_path, lang=None):
             return text
         else:
             # 使用指定语言
-            paddle_lang = get_paddle_lang(lang)
-            text, processing_time = extract_text_with_paddle(image_path, paddle_lang)
-            print(f"指定语言OCR结果 - 语言: {paddle_lang}, 文本长度: {len(text) if text else 0}")
+            tesseract_lang = get_tesseract_lang(lang)
+            text, processing_time = extract_text_with_tesseract(image_path, tesseract_lang)
+            print(f"指定语言OCR结果 - 语言: {tesseract_lang}, 文本长度: {len(text) if text else 0}")
             return text
 
     except Exception as e:
@@ -298,10 +209,10 @@ def text_to_pdf(text, output_path):
         # 设置字体（支持中文）
         try:
             # 尝试注册中文字体
-            font_path = "/System/Library/Fonts/PingFang.ttc"  # macOS系统字体
+            font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
             if os.path.exists(font_path):
-                pdfmetrics.registerFont(TTFont('PingFang', font_path))
-                c.setFont('PingFang', 12)
+                pdfmetrics.registerFont(TTFont('DejaVu', font_path))
+                c.setFont('DejaVu', 12)
             else:
                 c.setFont('Helvetica', 12)
         except:
@@ -312,7 +223,7 @@ def text_to_pdf(text, output_path):
         c.drawString(50, height - 50, 'OCR Recognition Result')
 
         # 添加文本内容
-        c.setFont('PingFang' if os.path.exists("/System/Library/Fonts/PingFang.ttc") else 'Helvetica', 12)
+        c.setFont('DejaVu' if os.path.exists("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") else 'Helvetica', 12)
 
         # 处理文本换行
         lines = text.split('\n')

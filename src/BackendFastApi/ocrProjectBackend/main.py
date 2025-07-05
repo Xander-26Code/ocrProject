@@ -18,7 +18,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 开发阶段建议直接用星号，彻底解决跨域
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,7 +26,6 @@ app.add_middleware(
 
 async def validate_file_size(file: UploadFile):
     """验证文件大小"""
-    # 读取文件内容来检查大小
     contents = await file.read()
     file_size = len(contents)
     
@@ -36,7 +35,6 @@ async def validate_file_size(file: UploadFile):
             detail=f"文件过大。最大允许大小: {MAX_FILE_SIZE // (1024*1024)}MB，当前文件大小: {file_size // (1024*1024)}MB"
         )
     
-    # 重置文件指针
     await file.seek(0)
     return contents
 
@@ -55,7 +53,6 @@ async def ocr_auto_detect(
     :param output_format: 输出格式，可选值：'text', 'word', 'pdf'
     """
     try:
-        # 验证文件大小
         contents = await validate_file_size(file)
         image = Image.open(io.BytesIO(contents))
 
