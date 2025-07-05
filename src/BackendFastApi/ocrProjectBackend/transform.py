@@ -11,9 +11,104 @@ import os
 import time
 import logging
 import pytesseract #This is the package we use to convert image to text
+import platform
+import subprocess
+import shutil
+
+# 配置tesseract路径
+def configure_tesseract():
+    """
+    智能配置tesseract可执行文件路径
+    """
+    # 常见的tesseract路径
+    common_paths = []
+    
+    # 根据操作系统设置常见路径
+    system = platform.system().lower()
+    
+    if system == 'windows':
+        common_paths = [
+            r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+            r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+            r'C:\Users\{}\AppData\Local\Tesseract-OCR\tesseract.exe'.format(os.getenv('USERNAME', '')),
+        ]
+    elif system == 'linux':
+        common_paths = [
+            '/usr/bin/tesseract',
+            '/usr/local/bin/tesseract',
+            '/opt/homebrew/bin/tesseract',
+        ]
+    elif system == 'darwin':  # macOS
+        common_paths = [
+            '/usr/local/bin/tesseract',
+            '/opt/homebrew/bin/tesseract',
+            '/usr/bin/tesseract',
+        ]
+    
+    # 方法1: 检查是否已经在PATH中
+    tesseract_path = shutil.which('tesseract')
+    if tesseract_path:
+        logger.info(f"Found tesseract in PATH: {tesseract_path}")
+        return tesseract_path
+    
+    # 方法2: 检查常见路径
+    for path in common_paths:
+        if os.path.exists(path):
+            logger.info(f"Found tesseract at: {path}")
+            return path
+    
+    # 方法3: 尝试使用系统命令查找
+    try:
+        if system == 'linux' or system == 'darwin':
+            result = subprocess.run(['which', 'tesseract'], capture_output=True, text=True)
+            if result.returncode == 0:
+                path = result.stdout.strip()
+                logger.info(f"Found tesseract using 'which': {path}")
+                return path
+        elif system == 'windows':
+            result = subprocess.run(['where', 'tesseract'], capture_output=True, text=True)
+            if result.returncode == 0:
+                path = result.stdout.strip().split('\n')[0]
+                logger.info(f"Found tesseract using 'where': {path}")
+                return path
+    except Exception as e:
+        logger.warning(f"Could not find tesseract using system command: {e}")
+    
+    # 如果都找不到，返回None
+    logger.warning("Could not find tesseract executable. Please install tesseract-ocr package.")
+    return None
+
+# 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 设置tesseract路径
+tesseract_path = configure_tesseract()
+#This is crucial for the tesseract to work
+#if you find the tesseract not working, please check the tesseract_path
+#using the following command in the terminal: which tesseract
+#after you find the tesseract_path, you can set the tesseract_path
+#using the following code:
+#pytesseract.pytesseract.tesseract_cmd = r'<full_path_to_your_tesseract_executable>'
+#and then you can use the tesseract to work
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    logger.info(f"Tesseract configured at: {tesseract_path}")
+else:
+    logger.error("Tesseract not found! Please install tesseract-ocr package.")
+    logger.error("Ubuntu/Debian: sudo apt install tesseract-ocr")
+    logger.error("macOS: brew install tesseract")
+    logger.error("Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki")
+
+# 验证tesseract是否正常工作
+try:
+    # 测试tesseract是否可用
+    available_langs = pytesseract.get_languages(config='')
+    logger.info(f"Available tesseract languages: {available_langs}")
+except Exception as e:
+    logger.error(f"Tesseract verification failed: {e}")
+
+# 设置随机种子
 current_time = int(time.time() * 1000000)  
 DetectorFactory.seed = current_time
 random.seed(current_time)  
