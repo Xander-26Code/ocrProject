@@ -10,7 +10,7 @@ class ApiService {
   // 健康检查
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseURL}/api/`)
+      const response = await fetch(`${this.baseURL}/api/health`)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
