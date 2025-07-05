@@ -21,7 +21,7 @@ This is a web-based intelligent OCR system that extracts text from images and ge
 
 - **Frontend**: Vue 3 + Vite + Ant Design Vue
 - **Backend**: FastAPI + Python
-- **OCR Engine**: Pytesseract(This is a wrapper for Google’s Tesseract-OCR Engine.)
+- **OCR Engine**: Pytesseract(This is a wrapper for Google's Tesseract-OCR Engine.)
 - **Web deployment**: Nginx
 - **Process Management**: PM2
 - **Document Generation**: python-docx + reportlab
@@ -308,7 +308,7 @@ sudo npm install -g pm2
 
 # 6. Create PM2 configuration file
 cd ~/ocrProject
-cat > ecosystem.config.js << 'EOF'
+cat > ecosystem.config.cjs << 'EOF'
 module.exports = {
   apps: [{
     name: 'ocr-backend',
@@ -332,7 +332,7 @@ EOF
 
 # 7. Create logs directory and start services
 mkdir -p ~/ocrProject/logs
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
 

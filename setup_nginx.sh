@@ -52,6 +52,12 @@ else
     echo -e "${GREEN}✅ Nginx已安装: $(nginx -v 2>&1)${NC}"
 fi
 
+# 解决403 Forbidden问题 - 确保Nginx有权限访问项目目录
+PROJECT_DIR="/home/admin/ocrProject"
+if [[ -d "$(dirname "$PROJECT_DIR")" ]]; then
+    sudo chmod 755 "$(dirname "$PROJECT_DIR")"
+fi
+
 # 停止Nginx服务（防止配置冲突）
 echo -e "${YELLOW}🛑 停止Nginx服务...${NC}"
 sudo systemctl stop nginx

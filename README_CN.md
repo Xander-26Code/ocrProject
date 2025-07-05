@@ -312,7 +312,7 @@ sudo npm install -g pm2
 
 # 6. 创建PM2配置文件
 cd ~/ocrProject
-cat > ecosystem.config.js << 'EOF'
+cat > ecosystem.config.cjs << 'EOF'
 module.exports = {
   apps: [{
     name: 'ocr-backend',
@@ -336,7 +336,7 @@ EOF
 
 # 7. 创建日志目录并启动服务
 mkdir -p ~/ocrProject/logs
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
 ```

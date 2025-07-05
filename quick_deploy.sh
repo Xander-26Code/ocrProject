@@ -161,6 +161,12 @@ fi
 # 4. 配置Nginx
 show_progress "配置Nginx"
 
+# 解决403 Forbidden问题 - 确保Nginx有权限访问项目目录
+if [[ -d "$(dirname "$PROJECT_DIR")" ]]; then
+    sudo chmod 755 "$(dirname "$PROJECT_DIR")"
+    echo -e "${GREEN}✅ 已设置项目父目录权限: $(dirname "$PROJECT_DIR")${NC}"
+fi
+
 # 创建临时配置文件
 cp nginx-ocr.conf /tmp/ocr-project.conf
 sed -i "s/SERVER_IP_PLACEHOLDER/$SERVER_IP/g" /tmp/ocr-project.conf
@@ -191,8 +197,8 @@ check_result "Nginx重启"
 if [[ "$AUTO_START_SERVICES" == "true" ]]; then
     show_progress "启动后端服务"
     
-    # 创建PM2配置
-    cat > ecosystem.config.js << EOF
+    # 创建PM2配置 (使用 .cjs 扩展名以兼容新版Node.js)
+    cat > ecosystem.config.cjs << EOF
 module.exports = {
   apps: [{
     name: 'ocr-backend',
@@ -219,7 +225,7 @@ EOF
     
     # 启动服务
     pm2 delete ocr-backend 2>/dev/null || true
-    pm2 start ecosystem.config.js
+    pm2 start ecosystem.config.cjs
     pm2 save
     check_result "后端服务启动"
 fi

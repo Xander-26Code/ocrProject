@@ -151,6 +151,11 @@ wait_for_user
 # =============================================================================
 echo -e "${YELLOW}⚙️  第4步: Nginx配置...${NC}"
 
+# 解决403 Forbidden问题 - 确保Nginx有权限访问项目目录
+if [[ -d "$(dirname "$PROJECT_DIR")" ]]; then
+    sudo chmod 755 "$(dirname "$PROJECT_DIR")"
+fi
+
 # 运行Nginx配置脚本
 chmod +x setup_nginx.sh
 ./setup_nginx.sh
@@ -170,9 +175,9 @@ if ! command -v pm2 &> /dev/null; then
     check_result "PM2安装"
 fi
 
-# 创建PM2配置
+# 创建PM2配置 (使用 .cjs 扩展名)
 cd "$PROJECT_DIR"
-cat > ecosystem.config.js << EOF
+cat > ecosystem.config.cjs << EOF
 module.exports = {
   apps: [{
     name: 'ocr-backend',
@@ -201,7 +206,7 @@ mkdir -p "$PROJECT_DIR/logs"
 pm2 delete ocr-backend 2>/dev/null || true
 
 # 启动服务
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
 check_result "后端服务启动"
