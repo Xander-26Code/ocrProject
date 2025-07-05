@@ -1,6 +1,25 @@
 #!/bin/bash
 
-echo "🌐 前端构建部署脚本 - 服务器: 47.99.143.167"
+# 自动检测服务器IP地址
+get_server_ip() {
+    local external_ip=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || curl -s icanhazip.com 2>/dev/null)
+    local local_ip=$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1)
+    local env_ip="${SERVER_IP:-}"
+    
+    if [[ -n "$env_ip" ]]; then
+        echo "$env_ip"
+    elif [[ -n "$external_ip" ]]; then
+        echo "$external_ip"
+    elif [[ -n "$local_ip" ]]; then
+        echo "$local_ip"
+    else
+        echo "localhost"
+    fi
+}
+
+SERVER_IP=$(get_server_ip)
+
+echo "🌐 前端构建部署脚本 - 服务器: $SERVER_IP"
 echo "=============================================="
 
 # 颜色定义
@@ -181,7 +200,7 @@ else
 fi
 
 # 测试服务器访问
-SERVER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://47.99.143.167/ 2>/dev/null || echo "000")
+SERVER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$SERVER_IP/ 2>/dev/null || echo "000")
 if [ "$SERVER_STATUS" = "200" ]; then
     echo -e "${GREEN}✅ 服务器访问正常 (HTTP 200)${NC}"
 else
@@ -204,7 +223,7 @@ echo -e "${YELLOW}📝 创建部署信息...${NC}"
 cat > "$DIST_DIR/deploy-info.json" << EOF
 {
     "deployTime": "$(date -Iseconds)",
-    "server": "47.99.143.167",
+    "server": "$SERVER_IP",
     "nodeVersion": "$(node --version)",
     "npmVersion": "$(npm --version)",
     "buildSize": "$(du -sh $DIST_DIR | cut -f1)",
@@ -216,9 +235,9 @@ EOF
 echo ""
 echo -e "${GREEN}🎉 前端部署完成！${NC}"
 echo "=============================================="
-echo -e "🌐 访问地址: ${BLUE}http://47.99.143.167${NC}"
-echo -e "🔧 API地址: ${BLUE}http://47.99.143.167/api/${NC}"
-echo -e "📖 API文档: ${BLUE}http://47.99.143.167/docs${NC}"
+echo -e "🌐 访问地址: ${BLUE}http://$SERVER_IP${NC}"
+echo -e "🔧 API地址: ${BLUE}http://$SERVER_IP/api/${NC}"
+echo -e "📖 API文档: ${BLUE}http://$SERVER_IP/docs${NC}"
 echo ""
 echo -e "${YELLOW}📊 部署统计:${NC}"
 echo "  构建时间: $(date)"
@@ -237,7 +256,7 @@ echo "  重启Nginx: sudo systemctl restart nginx"
 echo "  查看日志: sudo tail -f /var/log/nginx/ocr_error.log"
 echo ""
 echo -e "${YELLOW}🧪 测试命令:${NC}"
-echo "  curl http://47.99.143.167/"
-echo "  curl http://47.99.143.167/api/"
+echo "  curl http://$SERVER_IP/"
+echo "  curl http://$SERVER_IP/api/"
 echo ""
 echo -e "${GREEN}✨ 前端部署成功！您现在可以访问您的OCR应用了${NC}" 

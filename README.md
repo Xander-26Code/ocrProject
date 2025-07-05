@@ -14,6 +14,8 @@ This is a web-based intelligent OCR system that extracts text from images and ge
 - 🚀 **Lightweight Deployment**: Based on Tesseract OCR with only 300-500MB memory usage
 - 💾 **Efficient Processing**: Suitable for low memory servers(2GB, 4GB .etc), supports image files up to 50MB
 - 🌐 **Modern UI**: Built with Vue3 and Ant Design Vue for beautiful interface
+- 🔒 **Secure Deployment**: No hardcoded IP addresses, automatic environment detection
+- ⚡ **One-Click Deployment**: Multiple deployment options for different environments
 
 ## 🛠 Tech Stack
 
@@ -33,18 +35,52 @@ This is a web-based intelligent OCR system that extracts text from images and ge
 - Ubuntu/Debian system
 - No requirement for gpu configuration
 
-### Super easy Deployment
+## 🔒 Secure Deployment
+
+This project has been **security-optimized** with no hardcoded IP addresses. All scripts automatically detect the server environment for secure deployment on any server.
+
+### 🚀 One-Click Deployment (Recommended)
 ```bash
 # Clone the project
 git clone https://github.com/Xander-26Code/ocrProject.git
 cd ocrProject
 
-# Full project deployment
+# Quick deployment with auto IP detection
+chmod +x quick_deploy.sh
+./quick_deploy.sh
+```
+
+### ⚙️ Custom Configuration Deployment
+```bash
+# 1. Create configuration file (optional)
+cat > config.env << EOF
+# Server IP (leave empty for auto-detection)
+SERVER_IP=
+
+# Port configuration
+NGINX_PORT=80
+BACKEND_PORT=8000
+
+# Project directory
+PROJECT_DIR=/home/admin/ocrProject
+
+# Deployment options
+AUTO_START_SERVICES=true
+INSTALL_SYSTEM_DEPS=true
+EOF
+
+# 2. Deploy with custom configuration
+./quick_deploy.sh
+```
+
+### 🔧 Advanced Full Deployment
+```bash
+# Complete deployment with all checks and optimizations
 chmod +x deploy_full_project.sh
 ./deploy_full_project.sh
 ```
 
-### Step-by-Step Deployment
+### 📋 Step-by-Step Deployment
 ```bash
 # 1. Deploy backend
 cd src/BackendFastApi/ocrProjectBackend
@@ -59,6 +95,26 @@ chmod +x deploy_frontend.sh
 # 3. Configure Nginx
 chmod +x setup_nginx.sh
 ./setup_nginx.sh
+```
+
+## 🔍 Automatic IP Detection
+
+The deployment scripts automatically detect your server IP in the following priority:
+
+1. **Environment Variable**: `$SERVER_IP`
+2. **External IP**: Via `ifconfig.me` and other services
+3. **Local IP**: From routing table
+4. **Default**: `localhost`
+
+### Manual IP Configuration
+```bash
+# Method 1: Environment variable
+export SERVER_IP=your-server-ip
+./quick_deploy.sh
+
+# Method 2: Configuration file
+echo "SERVER_IP=your-server-ip" > config.env
+./quick_deploy.sh
 ```
 ### Normal Deployment
 ```bash
@@ -293,22 +349,29 @@ ocrProject/
 │       └── ocrProjectBackend/
 │           ├── main.py     # FastAPI main program
 │           ├── transform.py # OCR processing logic
-│           └── requirements.txt
+│           ├── requirements.txt
+│           └── install_tesseract.sh
 ├── public/                 # Static assets
+├── quick_deploy.sh         # One-click deployment script (Recommended)
 ├── deploy_full_project.sh  # Complete deployment script
 ├── deploy_frontend.sh      # Frontend deployment script
 ├── setup_nginx.sh          # Nginx configuration script
-└── nginx-ocr.conf         # Nginx configuration file
+├── nginx-ocr.conf         # Nginx configuration template
+├── config.env             # Configuration file template
+├── DEPLOYMENT_GUIDE.md    # Detailed deployment guide
+└── README_CN.md           # Chinese documentation
 ```
 
 ## 🎮 How to Use
 
-1. Visit `http://your-server-ip` to open the web interface
+1. Visit your server's web interface (URL will be displayed after deployment)
 2. Click the upload button to select an image file
 3. Choose recognition language (or use auto-detection)
 4. Select output format (Text/Word/PDF)
 5. Click "Start Recognition" button
 6. Wait for processing to complete and download results
+
+The deployment scripts will automatically display your access URLs after successful deployment.
 
 ## 🌍 Supported Languages
 
@@ -328,16 +391,43 @@ ocrProject/
 
 ## 🔧 Configuration
 
-- **Server Address**: Configured in `nginx-ocr.conf`
+### Security Configuration
+- **No Hardcoded IPs**: All server addresses are automatically detected
+- **Environment Detection**: Smart IP detection with fallback options
+- **Config File**: Use `config.env` for custom settings
+- **Environment Variables**: Support for `SERVER_IP` and other variables
+
+### System Configuration
 - **API Address**: Uses `/api` relative path in production
 - **File Upload Limit**: Maximum 50MB
 - **Memory Limit**: Backend service maximum 512MB memory
+- **Port Configuration**: Nginx (80), Backend (8000) - configurable
+
+### Configuration File (`config.env`)
+```bash
+# Server IP (leave empty for auto-detection)
+SERVER_IP=
+
+# Port configuration
+NGINX_PORT=80
+BACKEND_PORT=8000
+
+# Project directory
+PROJECT_DIR=/home/admin/ocrProject
+
+# Deployment options
+AUTO_START_SERVICES=true
+INSTALL_SYSTEM_DEPS=true
+SETUP_FIREWALL=false
+```
 
 ## 📝 API Documentation
 
 After deployment, you can access:
 - **API Documentation**: `http://your-server-ip/docs`
 - **Health Check**: `http://your-server-ip/api/`
+
+The exact URLs will be displayed by the deployment scripts after successful deployment.
 
 ## 🐛 Troubleshooting
 
@@ -357,20 +447,31 @@ After deployment, you can access:
 
 ### Basic API Testing
 ```bash
+# Get server IP automatically
+SERVER_IP=$(curl -s ifconfig.me)
+
 # Test frontend
-curl http://your-server-ip/
+curl http://$SERVER_IP/
 
 # Test API
-curl http://your-server-ip/api/
+curl http://$SERVER_IP/api/
 
 # Test API documentation
-curl http://your-server-ip/docs
+curl http://$SERVER_IP/docs
 ```
 
 ### OCR Testing
 ```bash
 # Upload and test OCR functionality
-curl -X POST -F "file=@test.jpg" -F "lang=eng" http://your-server-ip/api/ocr/
+SERVER_IP=$(curl -s ifconfig.me)
+curl -X POST -F "file=@test.jpg" -F "lang=eng" http://$SERVER_IP/api/ocr/
+```
+
+### Deployment Testing
+```bash
+# Test deployment with different configurations
+export SERVER_IP=your-custom-ip
+./quick_deploy.sh
 ```
 
 ## 🚀 Deployment Architecture
@@ -389,6 +490,13 @@ curl -X POST -F "file=@test.jpg" -F "lang=eng" http://your-server-ip/api/ocr/
 
 ## 🔒 Security Features
 
+### Deployment Security
+- **No Hardcoded IPs**: All server addresses are automatically detected
+- **Environment Detection**: Smart IP detection with multiple fallback options
+- **Configuration Separation**: Sensitive settings in separate config files
+- **Automatic Cleanup**: Temporary files are automatically cleaned up
+
+### Application Security
 - File type validation
 - File size limits
 - Input sanitization
@@ -411,6 +519,20 @@ This project is licensed under the MIT License.
 
 For questions or suggestions, please create an Issue or contact the maintainer.
 
+## 🆕 Latest Updates
+
+### Security & Deployment Improvements
+- ✅ **Removed all hardcoded IP addresses** - Enhanced security
+- ✅ **Added automatic IP detection** - Universal deployment
+- ✅ **Created quick deployment script** - One-click setup
+- ✅ **Added configuration management** - Flexible customization
+- ✅ **Improved deployment documentation** - Better user experience
+
+### New Files Added
+- `quick_deploy.sh` - One-click deployment
+- `config.env` - Configuration template
+- `DEPLOYMENT_GUIDE.md` - Comprehensive deployment guide
+
 ## 🌟 Acknowledgments
 
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for the OCR engine
@@ -419,6 +541,29 @@ For questions or suggestions, please create an Issue or contact the maintainer.
 - [Ant Design Vue](https://antdv.com/) for the UI components
 
 ---
+
+## 📊 Deployment Options Comparison
+
+| Deployment Method | Use Case | Features | Difficulty |
+|------------------|----------|----------|------------|
+| **quick_deploy.sh** | New servers, quick setup | Auto IP detection, minimal config | ⭐ Easy |
+| **deploy_full_project.sh** | Production servers | Full checks, optimizations | ⭐⭐ Medium |
+| **Step-by-step** | Learning, customization | Manual control, debugging | ⭐⭐⭐ Advanced |
+| **Manual deployment** | Special requirements | Full control, documentation | ⭐⭐⭐⭐ Expert |
+
+**Recommendation**: Use `quick_deploy.sh` for most cases, `deploy_full_project.sh` for production.
+
+## 🚀 Quick Start Guide
+
+```bash
+# For new users - Just 3 steps!
+git clone https://github.com/Xander-26Code/ocrProject.git
+cd ocrProject
+./quick_deploy.sh
+
+# That's it! Your OCR service will be automatically deployed
+# The script will display your access URL when complete
+```
 
 ## 🌐 Multi-language Documentation
 

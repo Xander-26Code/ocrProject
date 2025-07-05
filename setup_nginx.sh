@@ -1,7 +1,32 @@
 #!/bin/bash
 
-echo "🔧 配置Nginx服务 - 服务器: 47.99.143.167"
-echo "========================================="
+# 自动检测服务器IP地址
+get_server_ip() {
+    # 方法1: 通过外部服务获取公网IP
+    local external_ip=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || curl -s icanhazip.com 2>/dev/null)
+    
+    # 方法2: 获取主要网络接口IP
+    local local_ip=$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1)
+    
+    # 方法3: 从环境变量获取
+    local env_ip="${SERVER_IP:-}"
+    
+    # 优先级：环境变量 > 外部IP > 本地IP
+    if [[ -n "$env_ip" ]]; then
+        echo "$env_ip"
+    elif [[ -n "$external_ip" ]]; then
+        echo "$external_ip"
+    elif [[ -n "$local_ip" ]]; then
+        echo "$local_ip"
+    else
+        echo "localhost"
+    fi
+}
+
+SERVER_IP=$(get_server_ip)
+
+echo "🔧 配置Nginx服务 - 服务器: $SERVER_IP"
+echo "========================================"
 
 # 颜色定义
 RED='\033[0;31m'
@@ -44,7 +69,16 @@ sudo rm -f /etc/nginx/sites-enabled/ocr-project
 
 # 复制新的配置文件
 echo -e "${YELLOW}📝 部署OCR项目配置...${NC}"
-sudo cp nginx-ocr.conf /etc/nginx/sites-available/ocr-project
+
+# 创建临时配置文件，替换IP占位符
+cp nginx-ocr.conf /tmp/ocr-project.conf
+sed -i "s/SERVER_IP_PLACEHOLDER/$SERVER_IP/g" /tmp/ocr-project.conf
+
+# 复制处理后的配置文件
+sudo cp /tmp/ocr-project.conf /etc/nginx/sites-available/ocr-project
+
+# 清理临时文件
+rm -f /tmp/ocr-project.conf
 
 # 创建软链接启用配置
 sudo ln -sf /etc/nginx/sites-available/ocr-project /etc/nginx/sites-enabled/
@@ -141,10 +175,10 @@ fi
 echo ""
 echo -e "${GREEN}🎉 Nginx配置完成！${NC}"
 echo "========================================"
-echo -e "🌐 网站地址: ${BLUE}http://47.99.143.167${NC}"
-echo -e "🔧 API地址: ${BLUE}http://47.99.143.167/api/${NC}"
-echo -e "📖 API文档: ${BLUE}http://47.99.143.167/docs${NC}"
-echo -e "💓 健康检查: ${BLUE}http://47.99.143.167/health${NC}"
+echo -e "🌐 网站地址: ${BLUE}http://$SERVER_IP${NC}"
+echo -e "🔧 API地址: ${BLUE}http://$SERVER_IP/api/${NC}"
+echo -e "📖 API文档: ${BLUE}http://$SERVER_IP/docs${NC}"
+echo -e "💓 健康检查: ${BLUE}http://$SERVER_IP/health${NC}"
 echo ""
 echo -e "${YELLOW}📋 管理命令:${NC}"
 echo "  重启Nginx: sudo systemctl restart nginx"
@@ -161,6 +195,6 @@ echo ""
 echo -e "${YELLOW}🔧 下一步操作:${NC}"
 echo "1. 确保后端服务运行: cd ~/ocrProject/src/BackendFastApi/ocrProjectBackend && pm2 start"
 echo "2. 如果前端404，请构建: cd ~/ocrProject && npm run build"
-echo "3. 测试访问: curl http://47.99.143.167"
+echo "3. 测试访问: curl http://$SERVER_IP"
 echo ""
 echo -e "${GREEN}✨ Nginx配置部署完成！${NC}" 

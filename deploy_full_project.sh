@@ -1,6 +1,37 @@
 #!/bin/bash
 
-echo "🚀 OCR项目完整部署脚本 - 服务器: 47.99.143.167"
+# 加载配置文件
+load_config() {
+    if [[ -f "config.env" ]]; then
+        source config.env
+        echo "✅ 已加载配置文件"
+    else
+        echo "⚠️  未找到config.env，使用默认配置"
+    fi
+}
+
+# 自动检测服务器IP地址
+get_server_ip() {
+    local external_ip=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || curl -s icanhazip.com 2>/dev/null)
+    local local_ip=$(ip route get 1 2>/dev/null | awk '{print $7}' | head -1)
+    local env_ip="${SERVER_IP:-}"
+    
+    if [[ -n "$env_ip" ]]; then
+        echo "$env_ip"
+    elif [[ -n "$external_ip" ]]; then
+        echo "$external_ip"
+    elif [[ -n "$local_ip" ]]; then
+        echo "$local_ip"
+    else
+        echo "localhost"
+    fi
+}
+
+# 加载配置
+load_config
+SERVER_IP=$(get_server_ip)
+
+echo "🚀 OCR项目完整部署脚本 - 服务器: $SERVER_IP"
 echo "================================================="
 
 # 颜色定义
@@ -226,13 +257,13 @@ fi
 echo ""
 echo -e "${GREEN}🎉 OCR项目部署完成！${NC}"
 echo "================================================="
-echo -e "🌐 访问地址: ${BLUE}http://47.99.143.167${NC}"
-echo -e "🔧 API地址: ${BLUE}http://47.99.143.167/api/${NC}"
-echo -e "📖 API文档: ${BLUE}http://47.99.143.167/docs${NC}"
-echo -e "💓 健康检查: ${BLUE}http://47.99.143.167/health${NC}"
+echo -e "🌐 访问地址: ${BLUE}http://$SERVER_IP${NC}"
+echo -e "🔧 API地址: ${BLUE}http://$SERVER_IP/api/${NC}"
+echo -e "📖 API文档: ${BLUE}http://$SERVER_IP/docs${NC}"
+echo -e "💓 健康检查: ${BLUE}http://$SERVER_IP/health${NC}"
 echo ""
 echo -e "${YELLOW}📊 部署信息:${NC}"
-echo "  服务器地址: 47.99.143.167"
+echo "  服务器地址: $SERVER_IP"
 echo "  项目目录: $PROJECT_DIR"
 echo "  前端文件: $PROJECT_DIR/dist"
 echo "  后端目录: $BACKEND_DIR"
@@ -246,9 +277,9 @@ echo "  重启Nginx: sudo systemctl restart nginx"
 echo "  查看Nginx日志: sudo tail -f /var/log/nginx/ocr_error.log"
 echo ""
 echo -e "${YELLOW}🧪 测试命令:${NC}"
-echo "  curl http://47.99.143.167/"
-echo "  curl http://47.99.143.167/api/"
-echo "  curl http://47.99.143.167/docs"
+echo "  curl http://$SERVER_IP/"
+echo "  curl http://$SERVER_IP/api/"
+echo "  curl http://$SERVER_IP/docs"
 echo ""
 echo -e "${YELLOW}💾 特性说明:${NC}"
 echo "  ✅ 轻量级Tesseract OCR引擎"
@@ -259,4 +290,4 @@ echo "  ✅ 适合4GB内存服务器"
 echo "  ✅ 内存占用: ~300-500MB"
 echo ""
 echo -e "${GREEN}✨ 部署成功！您的OCR服务已上线！${NC}"
-echo -e "${BLUE}现在可以访问 http://47.99.143.167 使用您的OCR应用${NC}" 
+echo -e "${BLUE}现在可以访问 http://$SERVER_IP 使用您的OCR应用${NC}" 
