@@ -1,5 +1,5 @@
 import { reactive, ref } from 'vue'
-import { apiService, wsService } from '../services/api.js'
+import { apiService, ocrAutoDetect } from '../services/api.js'
 
 // 应用状态管理
 export const useAppStore = () => {
@@ -63,33 +63,18 @@ export const useAppStore = () => {
       state.currentStep = 'processing'
       state.error = null
 
-      // 上传文件
-      const uploadResult = await apiService.uploadFiles(
-        state.selectedFiles,
-        (progress) => {
-          state.uploadProgress = progress
-        }
-      )
-
-      state.currentTaskId = uploadResult.task_id
-
       // 初始化任务列表
       state.tasks = state.selectedFiles.map((file, index) => ({
         id: index + 1,
         filename: file.name,
-        status: 'waiting',
+        status: 'processing',
         progress: 0,
         result: null,
         error: null
       }))
 
-      // 连接WebSocket获取实时更新
-      wsService.connect(state.currentTaskId)
-      wsService.subscribe('task_update', handleTaskUpdate)
-      wsService.subscribe('task_completed', handleTaskCompleted)
-
-      // 开始OCR处理
-      await apiService.startOcrProcessing(state.currentTaskId)
+      // 直接处理文件（简化版，不使用WebSocket）
+      await processFilesDirectly()
 
     } catch (error) {
       state.error = error.message
@@ -97,54 +82,58 @@ export const useAppStore = () => {
     }
   }
 
-  // 处理任务更新
-  const handleTaskUpdate = (data) => {
-    const task = state.tasks.find(t => t.id === data.task_id)
-    if (task) {
-      task.status = data.status
-      task.progress = data.progress
+  // 直接处理文件
+  const processFilesDirectly = async () => {
+    const results = []
+    
+    for (let i = 0; i < state.selectedFiles.length; i++) {
+      const file = state.selectedFiles[i]
+      const task = state.tasks[i]
+      
+      try {
+        task.status = 'processing'
+        task.progress = 50
+        
+        // 调用OCR API处理单个文件
+        const result = await ocrAutoDetect(file, 'text')
+        
+        task.status = 'completed'
+        task.progress = 100
+        task.result = result
+        
+        results.push({
+          id: i + 1,
+          filename: file.name,
+          text: result.text || result,
+          language: result.language || 'auto',
+          accuracy: result.accuracy || 85,
+          processing_time: result.processing_time || 1.0
+        })
+        
+      } catch (error) {
+        task.status = 'error'
+        task.error = error.message
+      }
     }
+    
+    // 设置结果并切换到结果页面
+    state.results = results.map(result => ({
+      ...result,
+      expanded: false,
+      editing: false
+    }))
+    
+    updateStats()
+    state.currentStep = 'results'
+    state.loading = false
   }
 
-  // 处理任务完成
-  const handleTaskCompleted = (data) => {
-    const task = state.tasks.find(t => t.id === data.task_id)
-    if (task) {
-      task.status = 'completed'
-      task.progress = 100
-      task.result = data.result
-    }
-
-    // 检查是否所有任务都完成
-    const allCompleted = state.tasks.every(t => t.status === 'completed' || t.status === 'error')
-    if (allCompleted) {
-      loadResults()
-    }
-  }
-
-  // 加载结果
-  const loadResults = async () => {
-    try {
-      const results = await apiService.getResults(state.currentTaskId)
-      state.results = results.map(result => ({
-        ...result,
-        expanded: false,
-        editing: false
-      }))
-
-      // 更新统计信息
-      updateStats()
-
-      state.currentStep = 'results'
-      state.loading = false
-
-      // 断开WebSocket连接
-      wsService.disconnect()
-
-    } catch (error) {
-      state.error = error.message
-      state.loading = false
-    }
+  // 加载结果 (简化版，结果已在processFilesDirectly中处理)
+  const loadResults = () => {
+    // 结果已经在processFilesDirectly中设置，这里只需要更新统计信息
+    updateStats()
+    state.currentStep = 'results'
+    state.loading = false
   }
 
   // 更新统计信息
@@ -172,8 +161,6 @@ export const useAppStore = () => {
       totalCharacters: 0,
       averageAccuracy: 0
     }
-
-    wsService.disconnect()
   }
 
   // 设置错误
