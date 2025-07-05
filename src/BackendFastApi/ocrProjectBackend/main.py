@@ -1,15 +1,30 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, APIRouter
 from fastapi.responses import JSONResponse, FileResponse
 from PIL import Image
 import io
 import transform
 import os
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+from transform import ocr_image, save_to_text, save_to_word, save_to_pdf, detect_language, get_tesseract_path, find_tesseract_path, get_installed_languages
+import uuid
+import time
+from typing import Dict, Any, Optional
 
-app = FastAPI()
+# 初始化FastAPI应用
+app = FastAPI(
+    title="OCR Web Service",
+    description="A modern web-based OCR system with multi-language support.",
+    version="1.1.0",
+)
+
+# 创建一个带/api前缀的路由器
+api_router = APIRouter(prefix="/api")
+
 # 文件大小限制 (50MB)
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
 
+# 配置CORS中间件
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -22,6 +37,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 定义临时文件目录
+TEMP_DIR = "temp_files"
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+# 智能查找Tesseract路径
+try:
+    tesseract_path = find_tesseract_path()
+    if tesseract_path:
+        get_tesseract_path(tesseract_path)
+        logger.info(f"✅ Tesseract path configured: {tesseract_path}")
+    else:
+        logger.warning("⚠️ Tesseract command not found. Please install Tesseract or check your PATH.")
+except Exception as e:
+    logger.error(f"❌ Error finding Tesseract: {e}")
 
 async def validate_file_size(file: UploadFile):
     """验证文件大小"""
@@ -37,184 +71,146 @@ async def validate_file_size(file: UploadFile):
     await file.seek(0)
     return contents
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@app.post("/ocr/auto/")
-async def ocr_auto_detect(
-    file: UploadFile = File(...),
-    output_format: str = Form('text')
-):
+@api_router.get("/", tags=["General"])
+async def read_root():
     """
-    自动检测图片中文字的语言并进行OCR识别
-    :param file: 上传的图片文件
-    :param output_format: 输出格式，可选值：'text', 'word', 'pdf'
+    Root endpoint for health check.
     """
-    try:
-        contents = await validate_file_size(file)
-        image = Image.open(io.BytesIO(contents))
+    return {"message": "Welcome to the OCR Web Service!"}
 
-        # 保存临时图片文件
-        temp_path = f"temp_{file.filename}"
-        image.save(temp_path)
+@api_router.get("/health", tags=["General"])
+async def health_check():
+    """
+    Health check endpoint.
+    """
+    return JSONResponse(content={"status": "ok"})
 
-        # 自动检测语言并进行OCR识别
-        text, detected_lang = transform.auto_detect_and_ocr(temp_path)
+@api_router.get("/config", tags=["General"])
+async def get_config() -> Dict[str, Any]:
+    """
+    Get server configuration and capabilities.
+    """
+    return {
+        "tesseract_version": get_tesseract_path(None) or "Not Found",
+        "supported_languages": get_installed_languages(),
+        "max_file_size_mb": 50
+    }
 
-        if text is None:
-            return JSONResponse(content={"error": "OCR识别失败"}, status_code=500)
-
-        # 根据输出格式处理
-        if output_format == 'text':
-            # 清理临时文件
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return JSONResponse(content={
-                "text": text,
-                "detected_language": detected_lang,
-                "language_name": transform.get_language_name(detected_lang)
-            })
-
-        elif output_format == 'word':
-            # 生成Word文档
-            base_name = file.filename.rsplit('.', 1)[0] if file.filename and '.' in file.filename else 'document'
-            word_filename = f"ocr_result_{base_name}.docx"
-            word_path = f"temp_{word_filename}"
-
-            if transform.text_to_word(text, word_path):
-                # 清理临时图片文件
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-                # 返回Word文档文件
-                return FileResponse(
-                    path=word_path,
-                    filename=word_filename,
-                    media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                )
-            else:
-                return JSONResponse(content={"error": "生成Word文档失败"}, status_code=500)
-
-        elif output_format == 'pdf':
-            # 生成PDF文档
-            base_name = file.filename.rsplit('.', 1)[0] if file.filename and '.' in file.filename else 'document'
-            pdf_filename = f"ocr_result_{base_name}.pdf"
-            pdf_path = f"temp_{pdf_filename}"
-
-            if transform.text_to_pdf(text, pdf_path):
-                # 清理临时图片文件
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-                # 返回PDF文档文件
-                return FileResponse(
-                    path=pdf_path,
-                    filename=pdf_filename,
-                    media_type='application/pdf'
-                )
-            else:
-                return JSONResponse(content={"error": "生成PDF文档失败"}, status_code=500)
-
-        else:
-            return JSONResponse(content={"error": "不支持的输出格式"}, status_code=400)
-
-    except Exception as e:
-        # 清理临时文件
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.remove(temp_path)
-        return JSONResponse(content={"error": f"处理失败: {str(e)}"}, status_code=500)
-
-@app.post("/ocr/")
-async def ocr_trans(
+@api_router.post("/ocr", tags=["OCR"])
+async def perform_ocr(
     file: UploadFile = File(...), 
-    lang: str = Form('eng'),
-    output_format: str = Form('text')
-):
+    lang: str = Form("eng"),
+    output_format: str = Form("text")
+) -> FileResponse | JSONResponse:
     """
-    OCR识别图片中的文字，支持输出为文本、Word文档或PDF
-    :param file: 上传的图片文件
-    :param lang: 语言代码，默认为'eng'，使用'auto'进行自动检测
-    :param output_format: 输出格式，可选值：'text', 'word', 'pdf'
+    Perform OCR on an uploaded image.
+    - **file**: Image file to process.
+    - **lang**: Recognition language (e.g., 'eng', 'chi_sim').
+    - **output_format**: 'text', 'word', or 'pdf'.
     """
+    start_time = time.time()
+    
+    # 检查文件大小
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File size exceeds 50MB limit.")
+        
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    if file_extension not in ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']:
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+
+    file_path = os.path.join(TEMP_DIR, f"{uuid.uuid4()}{file_extension}")
+    
     try:
-        # 验证文件大小
-        contents = await validate_file_size(file)
-        image = Image.open(io.BytesIO(contents))
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
         
-        # 保存临时图片文件
-        temp_path = f"temp_{file.filename}"
-        image.save(temp_path)
+        logger.info(f"Performing OCR with lang='{lang}' and format='{output_format}'")
+        text_result = ocr_image(file_path, lang=lang)
         
-        # OCR识别文字
-        if lang == 'auto':
-            text, detected_lang = transform.auto_detect_and_ocr(temp_path)
-            used_lang = detected_lang
-        else:
-            text = transform.image_to_text(temp_path, lang=lang)
-            used_lang = lang
-
-        if text is None:
-            return JSONResponse(content={"error": "OCR识别失败"}, status_code=500)
+        output_filename = f"{uuid.uuid4()}"
         
-        # 根据输出格式处理
         if output_format == 'text':
-            # 清理临时文件
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-
-            response_data = {"text": text}
-            if lang == 'auto':
-                response_data["detected_language"] = used_lang
-                response_data["language_name"] = transform.get_language_name(used_lang)
-
-            return JSONResponse(content=response_data)
-
+            output_path = save_to_text(text_result, os.path.join(TEMP_DIR, f"{output_filename}.txt"))
+            return JSONResponse(content={"text": text_result, "filename": os.path.basename(output_path)})
+        
         elif output_format == 'word':
-            # 生成Word文档
-            base_name = file.filename.rsplit('.', 1)[0] if file.filename and '.' in file.filename else 'document'
-            word_filename = f"ocr_result_{base_name}.docx"
-            word_path = f"temp_{word_filename}"
+            output_path = save_to_word(text_result, os.path.join(TEMP_DIR, f"{output_filename}.docx"))
+            return FileResponse(output_path, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename=f"{output_filename}.docx")
             
-            if transform.text_to_word(text, word_path):
-                # 清理临时图片文件
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                
-                # 返回Word文档文件
-                return FileResponse(
-                    path=word_path,
-                    filename=word_filename,
-                    media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                )
-            else:
-                return JSONResponse(content={"error": "生成Word文档失败"}, status_code=500)
-        
         elif output_format == 'pdf':
-            # 生成PDF文档
-            base_name = file.filename.rsplit('.', 1)[0] if file.filename and '.' in file.filename else 'document'
-            pdf_filename = f"ocr_result_{base_name}.pdf"
-            pdf_path = f"temp_{pdf_filename}"
+            output_path = save_to_pdf(text_result, os.path.join(TEMP_DIR, f"{output_filename}.pdf"))
+            return FileResponse(output_path, media_type='application/pdf', filename=f"{output_filename}.pdf")
             
-            if transform.text_to_pdf(text, pdf_path):
-                # 清理临时图片文件
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                
-                # 返回PDF文档文件
-                return FileResponse(
-                    path=pdf_path,
-                    filename=pdf_filename,
-                    media_type='application/pdf'
-                )
-            else:
-                return JSONResponse(content={"error": "生成PDF文档失败"}, status_code=500)
-        
         else:
-            return JSONResponse(content={"error": "不支持的输出格式"}, status_code=400)
+            raise HTTPException(status_code=400, detail="Invalid output format specified.")
 
     except Exception as e:
-        # 清理临时文件
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.remove(temp_path)
-        return JSONResponse(content={"error": f"处理失败: {str(e)}"}, status_code=500)
+        logger.error(f"OCR processing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        logger.info(f"Processing time: {time.time() - start_time:.2f}s")
+
+@api_router.post("/ocr/auto", tags=["OCR"])
+async def perform_ocr_auto_detect(
+    file: UploadFile = File(...),
+    output_format: str = Form("text")
+) -> FileResponse | JSONResponse:
+    """
+    Perform OCR with automatic language detection.
+    - **file**: Image file to process.
+    - **output_format**: 'text', 'word', or 'pdf'.
+    """
+    start_time = time.time()
+    
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File size exceeds 50MB limit.")
+        
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    if file_extension not in ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']:
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+
+    file_path = os.path.join(TEMP_DIR, f"{uuid.uuid4()}{file_extension}")
+
+    try:
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+            
+        # 初始识别以检测语言
+        initial_text = ocr_image(file_path, lang='eng') # Use English for initial pass
+        detected_lang_code, detected_lang_name = detect_language(initial_text)
+        logger.info(f"Language detected: {detected_lang_name} ({detected_lang_code})")
+        
+        # 使用检测到的语言进行完整OCR
+        final_text = ocr_image(file_path, lang=detected_lang_code)
+
+        output_filename = f"{uuid.uuid4()}"
+
+        if output_format == 'text':
+            output_path = save_to_text(final_text, os.path.join(TEMP_DIR, f"{output_filename}.txt"))
+            return JSONResponse(content={"text": final_text, "detected_lang": detected_lang_name, "filename": os.path.basename(output_path)})
+            
+        elif output_format == 'word':
+            output_path = save_to_word(final_text, os.path.join(TEMP_DIR, f"{output_filename}.docx"))
+            return FileResponse(output_path, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename=f"{output_filename}.docx")
+            
+        elif output_format == 'pdf':
+            output_path = save_to_pdf(final_text, os.path.join(TEMP_DIR, f"{output_filename}.pdf"))
+            return FileResponse(output_path, media_type='application/pdf', filename=f"{output_filename}.pdf")
+            
+        else:
+            raise HTTPException(status_code=400, detail="Invalid output format specified.")
+
+    except Exception as e:
+        logger.error(f"Auto-detect OCR failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        logger.info(f"Processing time: {time.time() - start_time:.2f}s")
+
+# 将路由器包含到主应用中
+app.include_router(api_router)

@@ -1,7 +1,5 @@
 // API配置和请求函数
-// 生产环境使用相对路径，开发环境使用localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.PROD ? '/api' : 'http://localhost:8000')
+const API_BASE_URL = import.meta.env.PROD ? '' : 'http://localhost:3000'
 
 class ApiService {
   constructor() {
@@ -12,7 +10,7 @@ class ApiService {
   // 健康检查
   async healthCheck() {
     try {
-      const response = await fetch(`${this.baseURL}/`)
+      const response = await fetch(`${this.baseURL}/api/`)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
@@ -34,7 +32,7 @@ export async function ocrImage(file, lang = 'eng', outputFormat = 'text') {
   formData.append('lang', lang);
   formData.append('output_format', outputFormat);
 
-  const response = await fetch(`${API_BASE_URL}/ocr/`, {
+  const response = await fetch(`${API_BASE_URL}/api/ocr/`, {
     method: 'POST',
     body: formData,
   });
@@ -57,7 +55,7 @@ export async function ocrAutoDetect(file, outputFormat = 'text') {
   formData.append('file', file);
   formData.append('output_format', outputFormat);
 
-  const response = await fetch(`${API_BASE_URL}/ocr/auto/`, {
+  const response = await fetch(`${API_BASE_URL}/api/ocr/auto/`, {
     method: 'POST',
     body: formData,
   });
