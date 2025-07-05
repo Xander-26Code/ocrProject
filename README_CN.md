@@ -36,7 +36,7 @@
 ### 超级简单部署
 ```bash
 # 克隆项目
-git clone <your-repo-url>
+git clone https://github.com/Xander-26Code/ocrProject.git
 cd ocrProject
 
 # 完整项目部署

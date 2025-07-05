@@ -36,7 +36,7 @@ This is a web-based intelligent OCR system that extracts text from images and ge
 ### Super easy Deployment
 ```bash
 # Clone the project
-git clone <your-repo-url>
+git clone https://github.com/Xander-26Code/ocrProject.git
 cd ocrProject
 
 # Full project deployment
